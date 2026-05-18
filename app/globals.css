@@ -1,26 +1,51 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* 
+  🎨 ตั้งค่า Theme สำหรับ Tailwind v4 
+*/
+@theme {
+  /* Fluid Typography ใช้วิธี Clamp เบื้องต้นเพื่อให้รองรับการซูมและหน้าจอขนาดต่างๆ */
+  --font-sans: var(--font-kanit), var(--font-prompt), ui-sans-serif, system-ui, sans-serif;
+
+  /* สีหลักของแบรนด์ */
+  --color-pos-brand: #ff5722;      /* สีส้มอมแดงน่ากิน */
+  --color-pos-brand-hover: #e64a19;
+
+  /* โทนสว่าง (Light Theme) เหมาะกับตาคนส่วนใหญ่และของกิน */
+  --color-pos-bg: #f3f4f6;       /* สีรองพื้นหลัง (Gray 100) */
+  --color-pos-card: #ffffff;     /* สีพื้นหลังการ์ดโต๊ะ/เมนู (White) */
+  --color-pos-border: #e5e7eb;   /* สีเส้นขอบ (Gray 200) */
+  --color-pos-text: #1f2937;     /* สีตัวหนังสือหลัก (Gray 800) */
+  --color-pos-text-muted: #6b7280; /* สีตัวหนังสือรอง (Gray 500) */
+
+  /* สีสถานะ (Status Colors) */
+  --color-pos-success: #10b981;  /* เขียวสดใจ */
+  --color-pos-danger: #ef4444;   /* แดงชัดเจน */
+  --color-pos-warning: #f59e0b;  /* เหลืองรอคอย */
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* ตั้งค่าพื้นฐานสำหรับทั้งแอป */
+@layer base {
+  body {
+    /* Touch Optimizations: กันเด้ง กันดึงจอ กันคลุมดำ */
+    @apply bg-pos-bg text-pos-text min-h-screen overflow-x-hidden touch-manipulation overscroll-none select-none;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* คลาสพิเศษ */
+@layer utilities {
+  .glass-panel {
+    @apply bg-pos-card/90 backdrop-blur-md border border-pos-border shadow-xl;
+  }
+  
+  /* ตัวช่วยสำหรับมือถือ (Safe Area) */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+  .safe-area-bottom {
+    padding-bottom: calc(env(safe-area-inset-bottom) + 1rem); /* 1rem เผื่อเหลือเผื่อขาด */
+  }
 }
