@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
+import { Plus, Edit, Trash2, ArrowUpDown, Search, Settings2, Hash, DollarSign } from "lucide-react";
+import Swal from "sweetalert2";
 
 interface AddOn {
   id: string;
@@ -13,8 +15,10 @@ interface AddOn {
 export default function AddonSettingPage() {
   const [addons, setAddons] = useState<AddOn[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortConfig, setSortConfig] = useState<{ key: keyof AddOn, direction: 'asc' | 'desc' } | null>(null);
 
-  // State สำหรับ Modal (ใช้ร่วมกันทั้ง เพิ่ม และ แก้ไข)
+  // Modal State
   const [showModal, setShowModal] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [formData, setFormData] = useState({ name: "", price: "0" });
@@ -28,8 +32,8 @@ export default function AddonSettingPage() {
     const { data, error } = await supabase
       .from("add_ons")
       .select("*")
-      .order("name", { ascending: true }); // เรียงตามตัวอักษร
-
+      .order("name", { ascending: true });
+    
     if (data) setAddons(data);
     if (error) console.error("Error fetching add-ons:", error);
     setLoading(false);
@@ -42,24 +46,58 @@ export default function AddonSettingPage() {
     }
   };
 
-  // ➕ เปิด Modal เพิ่มท็อปปิ้ง
+  // Sorting logic
+  const handleSort = (key: keyof AddOn) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const sortedAddons = useMemo(() => {
+    let sortableAddons = [...addons];
+    
+    // Filter
+    if (searchQuery) {
+      sortableAddons = sortableAddons.filter(item => 
+        item.name.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+    
+    // Sort
+    if (sortConfig !== null) {
+      sortableAddons.sort((a, b) => {
+        if (a[sortConfig.key] < b[sortConfig.key]) {
+          return sortConfig.direction === 'asc' ? -1 : 1;
+        }
+        if (a[sortConfig.key] > b[sortConfig.key]) {
+          return sortConfig.direction === 'asc' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+    return sortableAddons;
+  }, [addons, sortConfig, searchQuery]);
+
   const handleOpenAdd = () => {
     setEditId(null);
     setFormData({ name: "", price: "0" });
     setShowModal(true);
   };
 
-  // 📝 เปิด Modal แก้ไขท็อปปิ้ง
   const handleOpenEdit = (addon: AddOn) => {
     setEditId(addon.id);
     setFormData({ name: addon.name, price: addon.price.toString() });
     setShowModal(true);
   };
 
-  // ฟังก์ชันบันทึกข้อมูล (เพิ่ม/แก้ไข)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name) return alert("กรุณากรอกชื่อท็อปปิ้ง");
+    if (!formData.name) {
+      Swal.fire({ title: "ข้อผิดพลาด", text: "กรุณากรอกชื่อท็อปปิ้ง", icon: "warning", confirmButtonColor: "#ff5722" });
+      return;
+    }
 
     const payload = {
       name: formData.name,
@@ -68,105 +106,143 @@ export default function AddonSettingPage() {
     };
 
     if (editId) {
-      // โหมดแก้ไข
       const { data, error } = await supabase.from("add_ons").update(payload).eq("id", editId).select().single();
       if (error) {
-        alert("แก้ไขข้อมูลไม่สำเร็จ");
-        console.error(error);
+        Swal.fire({ title: "ข้อผิดพลาด", text: "แก้ไขข้อมูลไม่สำเร็จ", icon: "error", confirmButtonColor: "#ff5722" });
       } else if (data) {
-        const updatedList = addons.map(a => a.id === editId ? data : a).sort((a, b) => a.name.localeCompare(b.name));
-        setAddons(updatedList);
+        setAddons(addons.map(a => a.id === editId ? data : a));
         setShowModal(false);
+        Swal.fire({ title: "สำเร็จ", text: "อัปเดตข้อมูลเรียบร้อย", icon: "success", timer: 1500, showConfirmButton: false });
       }
     } else {
-      // โหมดเพิ่มใหม่
       const { data, error } = await supabase.from("add_ons").insert([payload]).select().single();
       if (error) {
-        alert("เพิ่มท็อปปิ้งไม่สำเร็จ");
-        console.error(error);
+        Swal.fire({ title: "ข้อผิดพลาด", text: "เพิ่มท็อปปิ้งไม่สำเร็จ", icon: "error", confirmButtonColor: "#ff5722" });
       } else if (data) {
-        const updatedList = [...addons, data].sort((a, b) => a.name.localeCompare(b.name));
-        setAddons(updatedList);
+        setAddons([...addons, data]);
         setShowModal(false);
+        Swal.fire({ title: "สำเร็จ", text: "เพิ่มท็อปปิ้งใหม่เรียบร้อย", icon: "success", timer: 1500, showConfirmButton: false });
       }
     }
   };
 
   const handleDelete = async (id: string, name: string) => {
-    if (confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบท็อปปิ้ง "${name}" ?`)) {
+    const result = await Swal.fire({
+      title: "ยืนยันการลบ?",
+      html: `คุณต้องการลบ <b>"${name}"</b> ใช่หรือไม่?`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#ef4444",
+      cancelButtonColor: "#94a3b8",
+      confirmButtonText: "ลบข้อมูล",
+      cancelButtonText: "ยกเลิก"
+    });
+
+    if (result.isConfirmed) {
       const { error } = await supabase.from("add_ons").delete().eq("id", id);
       if (!error) {
         setAddons(addons.filter(a => a.id !== id));
+        Swal.fire({ title: "ลบสำเร็จ", icon: "success", timer: 1500, showConfirmButton: false });
       } else {
-        alert("ลบข้อมูลไม่สำเร็จ");
-        console.error(error);
+        Swal.fire({ title: "ลบไม่สำเร็จ", text: error.message, icon: "error", confirmButtonColor: "#ef4444" });
       }
     }
   };
 
-  if (loading) return <div className="p-8 text-pos-text-muted">กำลังโหลดข้อมูลท็อปปิ้ง...</div>;
+  if (loading) return (
+    <div className="flex justify-center items-center h-48">
+      <div className="w-8 h-8 border-4 border-[#ff5722]/20 border-t-[#ff5722] rounded-full animate-spin"></div>
+    </div>
+  );
 
   return (
-    <div className="animate-in fade-in duration-300">
-      <div className="flex justify-between items-end mb-8">
+    <div className="animate-in fade-in duration-300 pb-10">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-pos-brand mb-1">จัดการท็อปปิ้ง (Add-on)</h1>
-          <p className="text-pos-text-muted">เพิ่มรายการส่วนเสริมและราคา เพื่อให้พนักงานกดเลือกตอนสั่งอาหาร</p>
+          <h1 className="text-3xl font-extrabold text-slate-900 mb-1 tracking-tight flex items-center gap-3">
+            <Settings2 className="text-[#ff5722]" size={32} />
+            จัดการท็อปปิ้ง (Add-on)
+          </h1>
+          <p className="text-slate-500 font-medium">เพิ่มรายการส่วนเสริมและราคา เพื่อให้พนักงานกดเลือกตอนสั่งอาหาร</p>
         </div>
         <button 
           onClick={handleOpenAdd}
-          className="bg-pos-brand text-white px-6 py-3 rounded-xl hover:bg-orange-600 transition-all font-bold shadow-lg active:scale-95 flex items-center gap-2"
+          className="bg-[#ff5722] text-white px-5 py-2.5 rounded-xl shadow-sm hover:shadow-md hover:bg-orange-600 transition-all font-bold flex items-center gap-2 active:scale-95"
         >
-          ➕ เพิ่มท็อปปิ้ง
+          <Plus size={20} /> เพิ่มท็อปปิ้ง
         </button>
+      </div>
+
+      {/* ค้นหา */}
+      <div className="mb-6 relative max-w-md">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+        <input 
+          type="text" 
+          placeholder="ค้นหาชื่อท็อปปิ้ง..."
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#ff5722]/20 focus:border-[#ff5722] transition-all text-slate-700"
+        />
       </div>
       
       {/* 📋 ตารางท็อปปิ้ง */}
-      <div className="bg-pos-card rounded-2xl border border-pos-border shadow-lg overflow-hidden max-w-4xl">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead className="bg-pos-bg text-pos-text-muted text-sm border-b border-pos-border">
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
+        <div className="overflow-x-auto no-scrollbar">
+          <table className="w-full text-left border-collapse">
+            <thead className="bg-slate-50 border-b border-slate-100">
               <tr>
-                <th className="p-4 font-medium w-24 text-center">สถานะ</th>
-                <th className="p-4 font-medium">ชื่อท็อปปิ้ง / ส่วนเสริม</th>
-                <th className="p-4 font-medium text-right text-pos-brand">ราคาบวกเพิ่ม (บาท)</th>
-                <th className="p-4 font-medium text-right">จัดการ</th>
+                <th className="px-6 py-4 font-semibold text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap w-24 text-center cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => handleSort("is_active")}>
+                  <div className="flex items-center justify-center gap-1">สถานะ <ArrowUpDown size={14}/></div>
+                </th>
+                <th className="px-6 py-4 font-semibold text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => handleSort("name")}>
+                  <div className="flex items-center gap-1"><Hash size={14}/> ชื่อท็อปปิ้ง <ArrowUpDown size={14}/></div>
+                </th>
+                <th className="px-6 py-4 font-semibold text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap text-right cursor-pointer hover:bg-slate-100 transition-colors w-48" onClick={() => handleSort("price")}>
+                  <div className="flex items-center justify-end gap-1">ราคา (บาท) <ArrowUpDown size={14}/></div>
+                </th>
+                <th className="px-6 py-4 font-semibold text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap text-right w-40">จัดการ</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-pos-border">
-              {addons.map((addon) => (
-                <tr key={addon.id} className={`hover:bg-pos-bg/50 transition-colors ${!addon.is_active ? 'opacity-50 grayscale' : ''}`}>
-                  <td className="p-4 text-center">
+            <tbody className="divide-y divide-slate-100">
+              {sortedAddons.map((addon) => (
+                <tr key={addon.id} className={`hover:bg-slate-50/80 transition-colors ${!addon.is_active ? 'opacity-60 bg-slate-50' : ''}`}>
+                  <td className="px-6 py-4 text-center whitespace-nowrap">
                     <button 
                       onClick={() => toggleActive(addon.id, addon.is_active)}
-                      className={`w-12 h-6 rounded-full transition-all relative ${addon.is_active ? 'bg-pos-success' : 'bg-gray-600'}`}
+                      className={`w-12 h-6 rounded-full transition-all relative ${addon.is_active ? 'bg-[#10b981]' : 'bg-slate-300'}`}
                     >
-                      <div className={`w-5 h-5 bg-white rounded-full absolute top-0.5 transition-all ${addon.is_active ? 'right-0.5' : 'left-0.5'}`} />
+                      <div className={`w-5 h-5 bg-white rounded-full shadow-sm absolute top-0.5 transition-all ${addon.is_active ? 'right-0.5' : 'left-0.5'}`} />
                     </button>
                   </td>
-                  <td className="p-4 font-bold text-xl text-white">{addon.name}</td>
-                  <td className="p-4 text-right font-bold text-pos-brand text-xl">
-                    {addon.price > 0 ? `+฿${addon.price}` : 'ฟรี'}
+                  <td className={`px-6 py-4 font-bold text-lg whitespace-nowrap ${!addon.is_active ? 'text-slate-500 line-through' : 'text-slate-800'}`}>
+                    {addon.name}
                   </td>
-                  <td className="p-4 text-right flex justify-end gap-2">
+                  <td className="px-6 py-4 text-right whitespace-nowrap">
+                    <span className="inline-flex items-center gap-1 font-extrabold text-[#ff5722] text-lg bg-[#ff5722]/10 px-3 py-1 rounded-lg">
+                      {addon.price > 0 ? `+฿${addon.price}` : 'ฟรี'}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-right flex justify-end gap-2 whitespace-nowrap">
                     <button 
                       onClick={() => handleOpenEdit(addon)}
-                      className="px-4 py-2 bg-pos-border hover:bg-pos-brand hover:text-white rounded-lg transition-all font-medium text-sm"
+                      className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                      title="แก้ไข"
                     >
-                      📝 แก้ไข
+                      <Edit size={18} />
                     </button>
                     <button 
                       onClick={() => handleDelete(addon.id, addon.name)}
-                      className="px-4 py-2 bg-pos-danger/10 text-pos-danger hover:bg-pos-danger hover:text-white rounded-lg transition-all font-medium text-sm"
+                      className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      title="ลบ"
                     >
-                      🗑️ ลบ
+                      <Trash2 size={18} />
                     </button>
                   </td>
                 </tr>
               ))}
-              {addons.length === 0 && (
+              {sortedAddons.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="p-8 text-center text-pos-text-muted">ยังไม่มีรายการท็อปปิ้ง</td>
+                  <td colSpan={4} className="px-6 py-12 text-center text-slate-400">ไม่พบข้อมูลท็อปปิ้ง</td>
                 </tr>
               )}
             </tbody>
@@ -174,53 +250,56 @@ export default function AddonSettingPage() {
         </div>
       </div>
 
-      {/* 📝 Modal ฟอร์มเพิ่ม/แก้ไขท็อปปิ้ง */}
+      {/* 📝 Modal Form */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="glass-panel p-8 rounded-3xl w-full max-w-sm animate-in zoom-in duration-200">
-            <h2 className="text-2xl font-bold mb-6 border-b border-pos-border pb-4">
-              {editId ? "📝 แก้ไขท็อปปิ้ง" : "➕ เพิ่มท็อปปิ้งใหม่"}
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white p-8 rounded-3xl w-full max-w-sm shadow-2xl animate-in zoom-in duration-200">
+            <h2 className="text-2xl font-bold mb-6 border-b border-slate-100 pb-4 text-slate-800 flex items-center gap-2">
+              <Edit className="text-[#ff5722]" size={24} />
+              {editId ? "แก้ไขท็อปปิ้ง" : "เพิ่มท็อปปิ้งใหม่"}
             </h2>
             
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-5">
               <div>
-                <label className="block text-sm text-pos-text-muted mb-1">ชื่อท็อปปิ้ง / ส่วนเสริม</label>
+                <label className="block text-sm font-semibold text-slate-600 mb-1.5">ชื่อท็อปปิ้ง / ส่วนเสริม</label>
                 <input 
                   type="text" required
                   value={formData.name}
                   onChange={(e) => setFormData({...formData, name: e.target.value})}
-                  placeholder="เช่น ไข่ดาว, เพิ่มข้าว, ใส่กล่อง"
-                  className="w-full bg-pos-bg border border-pos-border rounded-xl p-4 text-lg text-white focus:outline-none focus:border-pos-brand"
+                  placeholder="เช่น ไข่ดาว, เพิ่มข้าว..."
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#ff5722]/20 focus:border-[#ff5722] transition-all"
                 />
               </div>
 
               <div>
-                <label className="block text-sm text-pos-brand font-bold mb-1">ราคาบวกเพิ่ม (บาท)</label>
+                <label className="block text-sm font-semibold text-[#ff5722] mb-1.5 flex items-center gap-1">
+                  <DollarSign size={14} /> ราคาบวกเพิ่ม (บาท)
+                </label>
                 <input 
-                  type="number" required min="0"
+                  type="number" required min="0" step="0.01"
                   value={formData.price}
                   onChange={(e) => setFormData({...formData, price: e.target.value})}
-                  className="w-full bg-pos-bg border border-pos-brand/50 rounded-xl p-4 text-lg text-pos-brand font-bold focus:outline-none focus:border-pos-brand text-right"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-lg font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#ff5722]/20 focus:border-[#ff5722] transition-all text-right"
                   placeholder="0"
                 />
-                <p className="text-xs text-pos-text-muted mt-2">
-                  * หากเป็นตัวเลือกฟรี (เช่น ไม่ใส่ผัก) ให้ระบุราคาเป็น 0
+                <p className="text-xs text-slate-400 mt-2 font-medium">
+                  * หากเป็นตัวเลือกฟรีให้ระบุ 0
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 pt-4 mt-4 border-t border-pos-border">
+              <div className="grid grid-cols-2 gap-3 pt-4 border-t border-slate-100">
                 <button 
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="py-3 bg-pos-border text-pos-text-muted font-bold rounded-xl hover:text-white transition-all"
+                  className="py-3 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200 transition-all"
                 >
                   ยกเลิก
                 </button>
                 <button 
                   type="submit"
-                  className="py-3 bg-pos-brand text-white font-bold rounded-xl hover:bg-orange-600 transition-all active:scale-95 shadow-lg"
+                  className="py-3 bg-[#ff5722] text-white font-bold rounded-xl hover:bg-orange-600 transition-all shadow-md active:scale-95"
                 >
-                  {editId ? "บันทึกการแก้ไข" : "บันทึกข้อมูล"}
+                  บันทึกข้อมูล
                 </button>
               </div>
             </form>

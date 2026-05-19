@@ -79,12 +79,6 @@ export default function TablesPage() {
             <span className="text-pos-text-muted mr-2">พนักงาน:</span>
             <span className="font-semibold text-pos-success truncate">{staffName}</span>
           </div>
-          <button 
-            onClick={handleLogout}
-            className="flex-shrink-0 min-w-[44px] min-h-[44px] bg-white text-pos-danger border-2 border-pos-danger/20 px-5 py-3 rounded-2xl hover:bg-pos-danger hover:text-white hover:border-pos-danger transition-all active:scale-95 shadow-sm font-medium"
-          >
-            ออกกะ
-          </button>
         </div>
       </div>
 
@@ -117,7 +111,7 @@ export default function TablesPage() {
         })}
 
         {/* ปุ่มสร้างโต๊ะพิเศษ (สั่งกลับบ้าน / โต๊ะเสริม) */}
-        <button
+        {/* <button
           className="h-32 md:h-40 rounded-3xl flex flex-col items-center justify-center bg-transparent border-2 border-dashed border-pos-text-muted/50 hover:border-pos-brand hover:bg-pos-brand/5 text-pos-text-muted hover:text-pos-brand transition-all active:scale-95 min-h-[44px]"
           onClick={() => {
             const customName = prompt("ใส่ชื่อโต๊ะเสริม หรือ สั่งกลับบ้าน:");
@@ -126,7 +120,7 @@ export default function TablesPage() {
         >
           <div className="text-4xl mb-1">+</div>
           <h2 className="text-lg md:text-xl font-medium">โต๊ะเสริม/กลับบ้าน</h2>
-        </button>
+        </button> */}
       </div>
     </div>
   );

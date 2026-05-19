@@ -20,6 +20,8 @@
 # production
 /build
 
+# supabase
+/ lib/supabase.ts
 # misc
 .DS_Store
 *.pem
@@ -39,3 +41,4 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+lib/supabase.ts

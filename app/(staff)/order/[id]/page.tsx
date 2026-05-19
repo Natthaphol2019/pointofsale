@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import Swal from "sweetalert2";
+import { ArrowLeft, Trash2, ShoppingCart, Pencil, Scissors, Wallet } from "lucide-react";
 
 interface Category { id: string; name: string; }
 interface MenuItem { id: string; name: string; price: number; category_id: string; image_url?: string; cost?: number; }
@@ -278,7 +280,7 @@ export default function OrderPage() {
     const total = orderItems.reduce((sum, item) => sum + (item.price_at_time * item.quantity), 0);
     
     if (paymentMethod === "CASH" && (receivedAmount === "" || receivedAmount < total)) {
-      alert("จำนวนเงินที่รับมาไม่ถูกต้อง หรือ น้อยกว่ายอดบิล!");
+      Swal.fire({ icon: 'error', title: 'ยอดเงินไม่ถูกต้อง', text: 'จำนวนเงินที่รับมาไม่ถูกต้อง หรือ น้อยกว่ายอดบิล!', confirmButtonColor: '#ff5722' });
       return;
     }
 
@@ -289,14 +291,23 @@ export default function OrderPage() {
     }).eq("id", activeOrderId);
 
     if (!error) {
-      alert("เช็คบิลสำเร็จ! กำลังกลับหน้าแผนผังโต๊ะ");
+      Swal.fire({ icon: 'success', title: 'เช็คบิลสำเร็จ!', text: 'กำลังกลับหน้าแผนผังโต๊ะ', showConfirmButton: false, timer: 1500 });
       router.push("/tables");
     }
   };
 
   const handleVoidOrder = async () => {
-    const isConfirm = window.confirm("คุณแน่ใจหรือไม่ว่าต้องการยกเลิกบิลนี้?\nข้อมูลรายการอาหารทั้งหมดในบิลนี้จะถูกลบทิ้ง!");
-    if (!isConfirm) return;
+    const result = await Swal.fire({
+      title: 'ยกเลิกบิลนี้?',
+      text: "ข้อมูลรายการอาหารทั้งหมดในบิลนี้จะถูกลบทิ้ง ไม่สามารถกู้คืนได้!",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#64748b',
+      confirmButtonText: 'ตั้งใจยกเลิก',
+      cancelButtonText: 'ปิด'
+    });
+    if (!result.isConfirmed) return;
 
     if (activeOrderId !== "new") {
       // ลบรายการ order_items ก่อน
@@ -305,7 +316,7 @@ export default function OrderPage() {
       await supabase.from("orders").delete().eq("id", activeOrderId);
     }
     
-    alert("ยกเลิกบิลเรียบร้อยแล้ว");
+    Swal.fire({ icon: 'success', title: 'ยกเลิกบิลเรียบร้อยแล้ว', showConfirmButton: false, timer: 1500 });
     router.push("/tables");
   };
 
@@ -321,7 +332,7 @@ export default function OrderPage() {
         <div className="p-4 border-b border-pos-border bg-pos-card flex items-center justify-between sticky top-0 z-10 shrink-0">
           <div className="flex items-center gap-3">
             <button onClick={() => router.push("/tables")} className="bg-pos-bg border border-pos-border rounded-2xl hover:bg-pos-brand/10 hover:border-pos-brand flex items-center justify-center w-12 h-12 min-w-[44px] min-h-[44px] active:scale-95 transition-all text-pos-text-muted">
-              <span className="text-xl">⬅️</span>
+              <ArrowLeft size={24} className="text-slate-600" />
             </button>
             <div>
               <h1 className="font-bold text-xl md:text-2xl text-pos-brand leading-tight">โต๊ะ {orderInfo?.table_number || "..."}</h1>
@@ -333,7 +344,7 @@ export default function OrderPage() {
             onClick={handleVoidOrder}
             className="px-4 py-2 bg-pos-danger/10 text-pos-danger hover:bg-pos-danger hover:text-white rounded-2xl text-sm font-medium transition-all active:scale-95 flex items-center gap-2 min-h-[44px]"
           >
-            <span className="text-lg">🗑️</span>
+            <Trash2 size={20} />
             <span className="hidden sm:inline">ยกเลิกบิล</span>
           </button>
         </div>
@@ -427,7 +438,7 @@ export default function OrderPage() {
         <div className="flex-1 p-3 md:p-4 overflow-y-auto space-y-4 pb-32 md:pb-32 bg-pos-bg md:bg-transparent overscroll-none touch-pan-y">
           {orderItems.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-pos-text-muted gap-4 opacity-70">
-              <span className="text-6xl drop-shadow-sm">🛒</span>
+              <ShoppingCart size={64} className="text-pos-text-muted opacity-60 mb-2" strokeWidth={1.5} />
               <p className="text-xl font-medium">ยังไม่มีรายการอาหาร</p>
             </div>
           ) : (
@@ -460,7 +471,7 @@ export default function OrderPage() {
                   
                   {/* ช่อง Note */}
                   <div className="flex items-center gap-2 mb-3">
-                    <span className="text-xl opacity-50">📝</span>
+                    <Pencil size={20} className="text-pos-text-muted opacity-60" />
                     <input
                       type="text"
                       inputMode="text"
@@ -470,7 +481,7 @@ export default function OrderPage() {
                       className="flex-1 bg-pos-bg border-2 border-pos-border rounded-xl px-4 py-3 text-base focus:outline-none focus:border-pos-brand transition-all text-pos-text h-12"
                     />
                     <button onClick={() => handleUpdateQuantity(item.id, item.quantity, -item.quantity)} className="w-12 h-12 flex items-center justify-center bg-pos-danger/10 text-pos-danger rounded-xl shrink-0 active:scale-95 transition-transform touch-manipulation hover:bg-pos-danger hover:text-white">
-                      <span className="text-xl">🗑️</span>
+                      <Trash2 size={20} />
                     </button>
                   </div>
 
@@ -481,7 +492,7 @@ export default function OrderPage() {
                           onClick={() => handleSplitItem(item)}
                           className="px-4 py-2 min-h-[44px] bg-pos-bg border-2 border-pos-border rounded-full hover:border-pos-brand text-sm font-medium text-pos-text hover:text-pos-brand active:scale-95 transition-all flex items-center gap-1.5 touch-manipulation"
                         >
-                          <span className="text-base">🪚</span> แยก 1 จาน
+                          <Scissors size={18} className="opacity-80" /> แยก 1 จาน
                         </button>
                       )}
                       
@@ -542,7 +553,7 @@ export default function OrderPage() {
             onClick={() => setShowCheckoutModal(true)}
             className="w-full py-4 bg-pos-success text-white rounded-2xl text-xl font-bold active:scale-95 disabled:opacity-50"
           >
-            💰 ชำระเงิน / ปิดบิล
+            <div className="flex items-center justify-center gap-2"><Wallet size={24} /> <span>ชำระเงิน / ปิดบิล</span></div>
           </button>
         </div>
       </div>

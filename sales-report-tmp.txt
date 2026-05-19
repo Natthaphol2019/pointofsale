@@ -1,0 +1,277 @@
+"use client";
+
+import { useState, useEffect, useMemo } from "react";
+import { supabase } from "@/lib/supabase";
+import { Search, Calendar, Eraser, Receipt, Smartphone, Banknote, FileText, LayoutGrid, AlertCircle, TrendingUp, HandCoins } from "lucide-react";
+
+interface Order {
+  id: string;
+  order_number: string;
+  table_number: string;
+  total_amount: number;
+  payment_method: string;
+  closed_at: string;
+}
+
+export default function SalesReportPage() {
+  const [allOrders, setAllOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // State สำหรับ Filter ค้นหา
+  const [searchTerm, setSearchTerm] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+
+  useEffect(() => {
+    fetchOrders();
+  }, []);
+
+  const fetchOrders = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("orders")
+      .select("id, order_number, table_number, total_amount, payment_method, closed_at")
+      .eq("status", "PAID")
+      .order("closed_at", { ascending: false }); // ใหม่สุดขึ้นก่อน
+
+    if (data) setAllOrders(data);
+    if (error) console.error("Error fetching orders:", error);
+    setLoading(false);
+  };
+
+  // 🔍 ลอจิกการกรองข้อมูล (Filter)
+  const filteredOrders = useMemo(() => {
+    return allOrders.filter((order) => {
+      // 1. ค้นหาจากเลขบิล หรือ ชื่อโต๊ะ
+      const matchSearch = 
+        order.order_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        order.table_number.toLowerCase().includes(searchTerm.toLowerCase());
+
+      // 2. กรองจากช่วงวันที่
+      let matchDate = true;
+      const orderDate = new Date(order.closed_at).getTime();
+
+      if (startDate) {
+        const start = new Date(startDate).setHours(0, 0, 0, 0);
+        if (orderDate < start) matchDate = false;
+      }
+      if (endDate) {
+        const end = new Date(endDate).setHours(23, 59, 59, 999);
+        if (orderDate > end) matchDate = false;
+      }
+
+      return matchSearch && matchDate;
+    });
+  }, [allOrders, searchTerm, startDate, endDate]);
+
+  // 🧮 คำนวณสรุปยอดจากรายการที่ค้นหาเจอ
+  const summary = useMemo(() => {
+    let totalSales = 0;
+    let cashSales = 0;
+    let transferSales = 0;
+
+    filteredOrders.forEach(order => {
+      totalSales += order.total_amount;
+      if (order.payment_method === 'CASH') cashSales += order.total_amount;
+      if (order.payment_method === 'TRANSFER') transferSales += order.total_amount;
+    });
+
+    return { totalSales, cashSales, transferSales, billCount: filteredOrders.length };
+  }, [filteredOrders]);
+
+  const formatDateTime = (dateString: string) => {
+    if (!dateString) return "-";
+    return new Date(dateString).toLocaleString("th-TH", { 
+      year: 'numeric', month: 'short', day: 'numeric', 
+      hour: '2-digit', minute: '2-digit' 
+    });
+  };
+
+  const handleClearFilter = () => {
+    setSearchTerm("");
+    setStartDate("");
+    setEndDate("");
+  };
+
+  if (loading) return (
+    <div className="flex justify-center items-center h-48">
+      <div className="w-8 h-8 border-4 border-[#ff5722]/20 border-t-[#ff5722] rounded-full animate-spin"></div>
+    </div>
+  );
+
+  return (
+    <div className="animate-in fade-in duration-300 w-full pb-10">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
+        <div>
+          <h1 className="text-3xl font-extrabold text-slate-900 mb-1 tracking-tight">รายงานยอดขาย</h1>
+          <p className="text-slate-500 font-medium">ดูประวัติบิลทั้งหมด ค้นหา และสรุปยอดตามช่วงเวลา</p>
+        </div>
+      </div>
+
+      {/* 📊 สรุปยอดจากผลการค้นหา */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div className="bg-gradient-to-br from-[#ff5722] to-[#ff8a50] p-5 rounded-2xl shadow-lg relative overflow-hidden text-white">
+          <div className="absolute right-[-10px] top-[-10px] opacity-10">
+            <TrendingUp size={100} />
+          </div>
+          <p className="text-sm font-semibold opacity-90 mb-1">ยอดขายรวม (ตามที่ค้นหา)</p>
+          <h3 className="text-3xl font-extrabold tracking-tight">฿{summary.totalSales.toLocaleString()}</h3>
+        </div>
+
+        <div className="bg-white border border-slate-100 p-5 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative overflow-hidden group hover:border-[#10b981]/30 transition-colors">
+          <div className="absolute right-[-10px] top-1/2 -translate-y-1/2 opacity-[0.03] group-hover:opacity-10 transition-opacity">
+            <Banknote size={80} />
+          </div>
+          <div className="flex justify-between items-start mb-1">
+            <p className="text-sm font-bold text-slate-500">รับเงินสด</p>
+            <Banknote size={20} className="text-[#10b981]" />
+          </div>
+          <h3 className="text-2xl font-extrabold text-slate-900">฿{summary.cashSales.toLocaleString()}</h3>
+        </div>
+
+        <div className="bg-white border border-slate-100 p-5 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative overflow-hidden group hover:border-[#3b82f6]/30 transition-colors">
+          <div className="absolute right-[-10px] top-1/2 -translate-y-1/2 opacity-[0.03] group-hover:opacity-10 transition-opacity">
+            <Smartphone size={80} />
+          </div>
+          <div className="flex justify-between items-start mb-1">
+            <p className="text-sm font-bold text-slate-500">รับโอนเงิน</p>
+            <Smartphone size={20} className="text-[#3b82f6]" />
+          </div>
+          <h3 className="text-2xl font-extrabold text-slate-900">฿{summary.transferSales.toLocaleString()}</h3>
+        </div>
+
+        <div className="bg-white border border-slate-100 p-5 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative overflow-hidden group hover:border-slate-300 transition-colors">
+          <div className="absolute right-[-10px] top-1/2 -translate-y-1/2 opacity-[0.03] group-hover:opacity-10 transition-opacity">
+            <Receipt size={80} />
+          </div>
+          <div className="flex justify-between items-start mb-1">
+            <p className="text-sm font-bold text-slate-500">จำนวนบิลทั้งหมด</p>
+            <Receipt size={20} className="text-slate-400" />
+          </div>
+          <h3 className="text-2xl font-extrabold text-slate-900">{summary.billCount} <span className="text-base font-semibold text-slate-400 uppercase tracking-wide">บิล</span></h3>
+        </div>
+      </div>
+
+      {/* 🔍 แถบค้นหาและตัวกรอง */}
+      <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] mb-8 flex flex-col md:flex-row gap-4 items-end">
+        <div className="w-full md:flex-1 relative">
+          <label className="block text-sm font-bold text-slate-700 mb-1.5">ค้นหาเลขบิล / โต๊ะ</label>
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+              <Search size={18} />
+            </div>
+            <input 
+              type="text" 
+              placeholder="เช่น INV-123 หรือ โต๊ะ 3"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 focus:border-[#ff5722] focus:ring-4 focus:ring-[#ff5722]/10 outline-none rounded-xl py-3 pl-10 pr-4 text-slate-700 font-medium transition-all"
+            />
+          </div>
+        </div>
+
+        <div className="w-full md:w-48">
+          <label className="block text-sm font-bold text-slate-700 mb-1.5 hidden md:block">ตั้งแต่วันที่</label>
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+              <Calendar size={18} />
+            </div>
+            <input 
+              type="date" 
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 focus:border-[#ff5722] focus:ring-4 focus:ring-[#ff5722]/10 outline-none rounded-xl py-3 pl-10 pr-3 text-slate-700 font-medium transition-all appearance-none"
+            />
+          </div>
+        </div>
+        
+        <div className="w-full md:w-48">
+          <label className="block text-sm font-bold text-slate-700 mb-1.5 hidden md:block">ถึงวันที่</label>
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+              <Calendar size={18} />
+            </div>
+            <input 
+              type="date" 
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 focus:border-[#ff5722] focus:ring-4 focus:ring-[#ff5722]/10 outline-none rounded-xl py-3 pl-10 pr-3 text-slate-700 font-medium transition-all appearance-none"
+            />
+          </div>
+        </div>
+
+        <button 
+          onClick={handleClearFilter}
+          className="w-full md:w-auto px-6 py-3 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 hover:text-slate-800 transition-colors font-bold h-[48px] flex justify-center items-center gap-2 active:scale-95"
+        >
+          <Eraser size={18} /> ล้างค่า
+        </button>
+      </div>
+
+      {/* 📋 ตารางประวัติบิลทั้งหมด */}
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
+        <div className="overflow-x-auto no-scrollbar max-h-[600px] overflow-y-auto">
+          <table className="w-full text-left border-collapse relative">
+            <thead className="bg-slate-50 border-b border-slate-100 sticky top-0 z-10">
+              <tr>
+                <th className="px-6 py-4 font-semibold text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">วัน-เวลาปิดบิล</th>
+                <th className="px-6 py-4 font-semibold text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">เลขที่บิล</th>
+                <th className="px-6 py-4 font-semibold text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">โต๊ะ/ออเดอร์</th>
+                <th className="px-6 py-4 font-semibold text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap text-center">ช่องทางชำระ</th>
+                <th className="px-6 py-4 font-semibold text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap text-right rounded-tr-2xl">ยอดรวม</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filteredOrders.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-6 py-16 text-center text-slate-400">
+                    <AlertCircle size={48} className="mx-auto text-slate-200 mb-4" strokeWidth={1.5} />
+                    <p className="text-lg font-semibold text-slate-500">ไม่พบข้อมูลบิลที่ค้นหา</p>
+                    <p className="text-sm">ลองเปลี่ยนเงื่อนไขหรือช่วงเวลาในการค้นหาอีกครั้ง</p>
+                  </td>
+                </tr>
+              ) : (
+                filteredOrders.map((order) => (
+                  <tr key={order.id} className="hover:bg-slate-50/80 transition-colors group">
+                    <td className="px-6 py-4 text-slate-500 text-sm font-medium whitespace-nowrap flex items-center gap-2">
+                      <Calendar size={14} className="text-slate-400" />
+                      {formatDateTime(order.closed_at)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <FileText size={16} className="text-[#ff5722]" />
+                        <span className="font-bold text-[#ff5722]">{order.order_number}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <LayoutGrid size={16} className="text-slate-400" />
+                        <span className="font-semibold text-slate-700 px-2.5 py-1 bg-slate-100 rounded-lg">{order.table_number}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-center whitespace-nowrap">
+                      {order.payment_method === 'CASH' ? (
+                        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#10b981]/10 text-[#10b981] rounded-lg text-xs font-bold ring-1 ring-[#10b981]/20">
+                          <HandCoins size={14} strokeWidth={2.5} />
+                          <span>เงินสด</span>
+                        </div>
+                      ) : (
+                        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#3b82f6]/10 text-[#3b82f6] rounded-lg text-xs font-bold ring-1 ring-[#3b82f6]/20">
+                          <Smartphone size={14} strokeWidth={2.5} />
+                          <span>โอนเงิน</span>
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-right font-extrabold text-slate-900 text-lg whitespace-nowrap">
+                      ฿{order.total_amount.toLocaleString()}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}

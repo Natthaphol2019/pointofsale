@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import { Plus, Edit2, X, Save, Users, ShieldAlert, User, ShieldCheck } from "lucide-react";
 
 interface Profile {
   id: string;
@@ -11,208 +12,232 @@ interface Profile {
 }
 
 export default function StaffSettingPage() {
-  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [staff, setStaff] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // State สำหรับ Modal เพิ่มพนักงาน
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [newStaff, setNewStaff] = useState({
+  // Modal State
+  const [showModal, setShowModal] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [formData, setFormData] = useState({
     full_name: "",
     role: "STAFF",
-    pin_code: ""
+    pin_code: "",
   });
 
   useEffect(() => {
-    fetchProfiles();
+    fetchStaff();
   }, []);
 
-  const fetchProfiles = async () => {
+  const fetchStaff = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("*")
-      .order("role", { ascending: true }) // เรียง ADMIN ขึ้นก่อน
-      .order("full_name");
-
-    if (data) setProfiles(data);
-    if (error) console.error("Error fetching profiles:", error);
+    const { data } = await supabase.from("profiles").select("*").order("role");
+    if (data) setStaff(data);
     setLoading(false);
   };
 
-  // ฟังก์ชันเพิ่มพนักงานใหม่
-  const handleAddStaff = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    // Validate รหัส PIN ต้องเป็นตัวเลข 4 หลัก
-    if (!/^\d{4}$/.test(newStaff.pin_code)) {
-      return alert("รหัส PIN ต้องเป็นตัวเลข 4 หลักเท่านั้นครับ");
-    }
-    if (!newStaff.full_name) return alert("กรุณาใส่ชื่อพนักงาน");
-
-    const { data, error } = await supabase
-      .from("profiles")
-      .insert([{
-        full_name: newStaff.full_name,
-        role: newStaff.role,
-        pin_code: newStaff.pin_code
-      }])
-      .select().single();
-
-    if (error) {
-      alert("เพิ่มพนักงานไม่สำเร็จ (รหัส PIN อาจซ้ำ หรือระบบมีปัญหา)");
-      console.error(error);
-    } else if (data) {
-      setProfiles([...profiles, data]);
-      setShowAddModal(false);
-      setNewStaff({ full_name: "", role: "STAFF", pin_code: "" }); // ล้างค่าฟอร์ม
-    }
+  const handleOpenAdd = () => {
+    setEditId(null);
+    setFormData({ full_name: "", role: "STAFF", pin_code: "" });
+    setShowModal(true);
   };
 
-  // ฟังก์ชันลบพนักงาน
-  const handleDeleteStaff = async (id: string, name: string, role: string) => {
-    if (role === "ADMIN" && profiles.filter(p => p.role === "ADMIN").length === 1) {
-      return alert("ไม่สามารถลบ Admin คนสุดท้ายได้ครับ!");
+  const handleOpenEdit = (user: Profile) => {
+    setEditId(user.id);
+    setFormData({
+      full_name: user.full_name,
+      role: user.role,
+      pin_code: user.pin_code,
+    });
+    setShowModal(true);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.full_name || formData.pin_code.length !== 4) {
+      return alert("กรุณากรอกชื่อและรหัส PIN 4 หลักให้ถูกต้อง");
     }
-    
-    if (confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบรายชื่อ "${name}" ?\n(บิลเก่าๆ ที่พนักงานคนนี้เคยทำไว้จะยังคงอยู่)`)) {
-      const { error } = await supabase.from("profiles").delete().eq("id", id);
-      if (!error) {
-        setProfiles(profiles.filter(p => p.id !== id));
-      } else {
-        alert("ลบข้อมูลไม่สำเร็จ");
+
+    const payload = {
+      full_name: formData.full_name,
+      role: formData.role,
+      pin_code: formData.pin_code,
+    };
+
+    if (editId) {
+      const { data, error } = await supabase.from("profiles").update(payload).eq("id", editId).select().single();
+      if (!error && data) {
+        setStaff(staff.map((s) => (s.id === editId ? data : s)));
+        setShowModal(false);
+      }
+    } else {
+      const { data, error } = await supabase.from("profiles").insert([payload]).select().single();
+      if (!error && data) {
+        setStaff([...staff, data]);
+        setShowModal(false);
       }
     }
   };
 
-  if (loading) return <div className="p-8 text-pos-text-muted">กำลังโหลดข้อมูลพนักงาน...</div>;
+  const generatePin = () => {
+    const randomPin = Math.floor(1000 + Math.random() * 9000).toString();
+    setFormData({ ...formData, pin_code: randomPin });
+  };
+
+  if (loading) return (
+    <div className="flex justify-center items-center h-48">
+      <div className="w-8 h-8 border-4 border-[#ff5722]/20 border-t-[#ff5722] rounded-full animate-spin"></div>
+    </div>
+  );
 
   return (
-    <div className="animate-in fade-in duration-300">
-      <div className="flex justify-between items-end mb-8">
+    <div className="animate-in fade-in duration-300 w-full">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-pos-brand mb-1">จัดการพนักงาน</h1>
-          <p className="text-pos-text-muted">เพิ่มพนักงานใหม่ และตั้งค่ารหัส PIN เข้าสู่ระบบ</p>
+          <h1 className="text-3xl font-extrabold text-slate-900 mb-1 tracking-tight">จัดการพนักงาน</h1>
+          <p className="text-slate-500 font-medium">จัดการข้อมูลส่วนตัว สิทธิ์การเข้าถึง และรหัส PIN 4 หลัก</p>
         </div>
         <button 
-          onClick={() => setShowAddModal(true)}
-          className="bg-pos-brand text-white px-6 py-3 rounded-xl hover:bg-orange-600 transition-all font-bold shadow-lg active:scale-95 flex items-center gap-2"
+          onClick={handleOpenAdd}
+          className="bg-gradient-to-r from-[#ff5722] to-[#ff8a50] text-white px-6 py-3 rounded-xl hover:shadow-[0_8px_24px_rgba(255,87,34,0.3)] transition-all font-bold active:scale-[0.98] flex items-center gap-2"
         >
-          ➕ เพิ่มผู้ใช้งาน
+          <Plus size={20} strokeWidth={2.5} /> เพิ่มพนักงาน
         </button>
       </div>
-      
-      {/* 📋 ตารางรายชื่อพนักงาน */}
-      <div className="bg-pos-card rounded-2xl border border-pos-border shadow-lg overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead className="bg-pos-bg text-pos-text-muted text-sm border-b border-pos-border">
+
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
+        <div className="overflow-x-auto no-scrollbar">
+          <table className="w-full text-left border-collapse">
+            <thead className="bg-slate-50 border-b border-slate-100">
               <tr>
-                <th className="p-4 font-medium w-16 text-center">สิทธิ์</th>
-                <th className="p-4 font-medium">ชื่อ-นามสกุล</th>
-                <th className="p-4 font-medium text-center">รหัส PIN (4 หลัก)</th>
-                <th className="p-4 font-medium text-right">จัดการ</th>
+                <th className="px-6 py-4 font-semibold text-slate-500 text-xs uppercase tracking-wider">ชื่อพนักงาน</th>
+                <th className="px-6 py-4 font-semibold text-slate-500 text-xs uppercase tracking-wider text-center">สิทธิ์ / หน้าที่</th>
+                <th className="px-6 py-4 font-semibold text-slate-500 text-xs uppercase tracking-wider text-center">รหัสเข้าใช้งาน</th>
+                <th className="px-6 py-4 font-semibold text-slate-500 text-xs uppercase tracking-wider text-right rounded-tr-2xl">จัดการ</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-pos-border">
-              {profiles.map((profile) => (
-                <tr key={profile.id} className="hover:bg-pos-bg/50 transition-colors">
-                  <td className="p-4 text-center text-2xl">
-                    {profile.role === 'ADMIN' ? '👑' : '🧑‍🍳'}
+            <tbody className="divide-y divide-slate-100">
+              {staff.map((user) => (
+                <tr key={user.id} className="hover:bg-slate-50/80 transition-colors group">
+                  <td className="px-6 py-4 whitespace-nowrap flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${user.role.toUpperCase() === 'ADMIN' ? 'bg-[#ff5722]/10 text-[#ff5722]' : 'bg-slate-100 text-slate-500'}`}>
+                      {user.role.toUpperCase() === 'ADMIN' ? <ShieldCheck size={20} strokeWidth={2.5} /> : <User size={20} strokeWidth={2.5} />}
+                    </div>
+                    <div>
+                      <div className="font-bold text-slate-900 text-[15px]">{user.full_name}</div>
+                      <div className="text-xs text-slate-400 font-medium">ID: {user.id.substring(0, 8)}...</div>
+                    </div>
                   </td>
-                  <td className="p-4 font-bold text-lg">
-                    {profile.full_name}
-                    <span className={`ml-3 px-2 py-0.5 text-xs rounded-full border ${
-                      profile.role === 'ADMIN' ? 'bg-pos-brand/10 border-pos-brand/30 text-pos-brand' : 'bg-pos-text-muted/10 border-pos-border text-pos-text-muted'
+                  <td className="px-6 py-4 text-center whitespace-nowrap">
+                    <span className={`px-4 py-1.5 rounded-lg text-xs font-bold tracking-widest uppercase ${
+                      user.role.toUpperCase() === "ADMIN" 
+                        ? "bg-[#ff5722]/10 text-[#ff5722]" 
+                        : "bg-blue-50 text-blue-600"
                     }`}>
-                      {profile.role}
+                      {user.role}
                     </span>
                   </td>
-                  <td className="p-4 text-center">
-                    <span className="bg-pos-bg border border-pos-border px-4 py-2 rounded-lg font-mono text-xl tracking-widest text-white shadow-inner">
-                      {profile.pin_code}
-                    </span>
+                  <td className="px-6 py-4 text-center whitespace-nowrap font-mono text-lg font-bold tracking-widest text-slate-600">
+                    {user.pin_code}
                   </td>
-                  <td className="p-4 text-right">
+                  <td className="px-6 py-4 text-right whitespace-nowrap">
                     <button 
-                      onClick={() => handleDeleteStaff(profile.id, profile.full_name, profile.role)}
-                      className="px-4 py-2 bg-pos-danger/10 text-pos-danger hover:bg-pos-danger hover:text-white rounded-lg transition-all font-medium"
+                      onClick={() => handleOpenEdit(user)} 
+                      className="px-4 py-2.5 inline-flex items-center gap-2 bg-slate-100 text-slate-600 hover:bg-[#ff5722] hover:text-white hover:shadow-md rounded-xl transition-all font-medium text-sm focus:outline-none focus:ring-2 focus:ring-[#ff5722]/50 active:scale-95"
                     >
-                      ลบ
+                      <Edit2 size={16} strokeWidth={2} /> แก้ไข
                     </button>
                   </td>
                 </tr>
               ))}
+              {staff.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="px-6 py-12 text-center text-slate-500">
+                    <Users size={40} className="mx-auto text-slate-300 mb-3" />
+                    ไม่มีข้อมูลพนักงาน
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* 📝 Modal เพิ่มพนักงานใหม่ */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="glass-panel p-8 rounded-3xl w-full max-w-md animate-in zoom-in duration-200">
-            <h2 className="text-2xl font-bold mb-6 border-b border-pos-border pb-4">เพิ่มผู้ใช้งานใหม่</h2>
+      {/* Modal ฟอร์มพนักงาน */}
+      {showModal && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+          <div className="bg-white/95 backdrop-blur-xl border border-white p-6 md:p-8 rounded-[2rem] shadow-2xl w-full max-w-sm relative animate-in zoom-in-95 duration-300">
+            <button 
+              onClick={() => setShowModal(false)} 
+              className="absolute top-6 right-6 w-8 h-8 flex items-center justify-center bg-slate-100 text-slate-500 rounded-full hover:bg-slate-200 hover:text-slate-800 transition-colors"
+            >
+              <X size={18} strokeWidth={2.5} />
+            </button>
+
+            <h2 className="text-2xl font-bold text-slate-900 mb-6 flex items-center gap-2">
+              {editId ? <Edit2 className="text-[#ff5722]" size={24} /> : <Plus className="text-[#ff5722]" size={24} />}
+              {editId ? "แก้ไขข้อมูลพนักงาน" : "เพิ่มพนักงานใหม่"}
+            </h2>
             
-            <form onSubmit={handleAddStaff} className="space-y-5">
+            <form onSubmit={handleSubmit} className="space-y-5">
               <div>
-                <label className="block text-sm text-pos-text-muted mb-1">ชื่อ-นามสกุล / ชื่อเล่น</label>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5 flex justify-between">
+                  ชื่อนามสกุล หรือ ชื่อเล่น <span className="text-[#ff5722]">*</span>
+                </label>
                 <input 
-                  type="text" required
-                  value={newStaff.full_name}
-                  onChange={(e) => setNewStaff({...newStaff, full_name: e.target.value})}
-                  placeholder="เช่น Staff เจมส์"
-                  className="w-full bg-pos-bg border border-pos-border rounded-xl p-3 focus:outline-none focus:border-pos-brand"
+                  type="text" required placeholder="เช่น สมชาย ใจดี"
+                  value={formData.full_name} onChange={(e) => setFormData({...formData, full_name: e.target.value})} 
+                  className="w-full bg-slate-50 border border-slate-200 focus:border-[#ff5722] focus:ring-4 focus:ring-[#ff5722]/10 outline-none rounded-2xl p-3.5 transition-all text-slate-900 font-medium" 
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm text-pos-text-muted mb-1">สิทธิ์การใช้งาน</label>
-                  <select 
-                    value={newStaff.role}
-                    onChange={(e) => setNewStaff({...newStaff, role: e.target.value})}
-                    className="w-full bg-pos-bg border border-pos-border rounded-xl p-3 focus:outline-none focus:border-pos-brand"
-                  >
-                    <option value="STAFF">🧑‍🍳 STAFF (พนักงาน)</option>
-                    <option value="ADMIN">👑 ADMIN (แอดมิน)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm text-pos-text-muted mb-1">รหัส PIN (4 หลัก)</label>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">หน้าที่ (Role)</label>
+                <select 
+                  value={formData.role} 
+                  onChange={(e) => setFormData({...formData, role: e.target.value})} 
+                  className="w-full bg-slate-50 border border-slate-200 focus:border-[#ff5722] focus:ring-4 focus:ring-[#ff5722]/10 outline-none rounded-2xl p-3.5 transition-all text-slate-700 font-medium"
+                >
+                  <option value="STAFF">🧑‍🍳 พนักงาน (STAFF)</option>
+                  <option value="ADMIN">👑 ผู้ดูแลระบบ (ADMIN)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">รหัส PIN 4 หลัก สำหรับเข้าระบบ</label>
+                <div className="flex gap-2">
                   <input 
-                    type="text" required maxLength={4}
-                    value={newStaff.pin_code}
-                    onChange={(e) => {
-                      // บังคับพิมพ์ได้แค่ตัวเลข
-                      const val = e.target.value.replace(/\D/g, '');
-                      setNewStaff({...newStaff, pin_code: val});
-                    }}
-                    placeholder="เช่น 1234"
-                    className="w-full bg-pos-bg border border-pos-brand/50 rounded-xl p-3 focus:outline-none focus:border-pos-brand font-mono text-center text-lg tracking-widest text-pos-brand font-bold"
+                    type="text" required maxLength={4} minLength={4} placeholder="xxxx"
+                    value={formData.pin_code} 
+                    onChange={(e) => setFormData({...formData, pin_code: e.target.value.replace(/[^0-9]/g, '')})} 
+                    className="w-full bg-slate-50 border border-slate-200 focus:border-[#ff5722] focus:ring-4 focus:ring-[#ff5722]/10 outline-none rounded-2xl p-3.5 text-center transition-all text-slate-900 font-mono font-bold tracking-widest text-lg" 
                   />
+                  <button 
+                    type="button" onClick={generatePin} 
+                    className="bg-slate-100 text-slate-600 px-4 rounded-xl hover:bg-slate-200 transition-colors font-medium text-sm whitespace-nowrap"
+                  >
+                    สุ่มรหัส
+                  </button>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 pt-4 mt-2 border-t border-pos-border">
+              <div className="flex gap-4 pt-4 mt-4 border-t border-slate-100">
                 <button 
-                  type="button"
-                  onClick={() => setShowAddModal(false)}
-                  className="py-3 bg-pos-border text-pos-text-muted font-bold rounded-xl hover:text-white transition-all"
+                  type="button" onClick={() => setShowModal(false)} 
+                  className="flex-1 py-3.5 bg-slate-100 text-slate-600 font-bold rounded-2xl hover:bg-slate-200 transition-colors"
                 >
                   ยกเลิก
                 </button>
                 <button 
-                  type="submit"
-                  className="py-3 bg-pos-brand text-white font-bold rounded-xl hover:bg-orange-600 transition-all active:scale-95 shadow-lg"
+                  type="submit" 
+                  className="flex-1 py-3.5 bg-[#ff5722] text-white font-bold rounded-2xl hover:bg-orange-600 hover:shadow-lg transition-all active:scale-[0.98] flex justify-center items-center gap-2"
                 >
-                  บันทึกผู้ใช้งาน
+                  <Save size={18} strokeWidth={2.5}/> บันทึก
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
-
     </div>
   );
 }

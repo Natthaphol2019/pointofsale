@@ -2,11 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import { Plus, Edit2, X, Save, Folders, ShieldAlert } from "lucide-react";
 
 interface Category {
   id: string;
   name: string;
-  is_active: boolean;
   sort_order: number;
 }
 
@@ -14,10 +14,10 @@ export default function CategorySettingPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // State สำหรับ Modal (ใช้ร่วมกันทั้ง เพิ่ม และ แก้ไข)
+  // Modal State
   const [showModal, setShowModal] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
-  const [formData, setFormData] = useState({ name: "", sort_order: 1 });
+  const [formData, setFormData] = useState({ name: "", sort_order: "" });
 
   useEffect(() => {
     fetchCategories();
@@ -25,150 +25,104 @@ export default function CategorySettingPage() {
 
   const fetchCategories = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from("categories")
-      .select("*")
-      .order("sort_order", { ascending: true }); // เรียงตามตัวเลขที่ตั้งไว้
-
+    const { data } = await supabase.from("categories").select("*").order("sort_order");
     if (data) setCategories(data);
-    if (error) console.error("Error fetching categories:", error);
     setLoading(false);
   };
 
-  const toggleActive = async (id: string, currentStatus: boolean) => {
-    const { error } = await supabase.from("categories").update({ is_active: !currentStatus }).eq("id", id);
-    if (!error) {
-      setCategories(categories.map(c => c.id === id ? { ...c, is_active: !currentStatus } : c));
-    }
-  };
-
-  // ➕ เปิด Modal เพิ่มหมวดหมู่
   const handleOpenAdd = () => {
     setEditId(null);
-    setFormData({ name: "", sort_order: categories.length + 1 }); // แนะนำเลขลำดับถัดไปให้เลย
+    setFormData({ name: "", sort_order: (categories.length + 1).toString() });
     setShowModal(true);
   };
 
-  // 📝 เปิด Modal แก้ไขหมวดหมู่
-  const handleOpenEdit = (category: Category) => {
-    setEditId(category.id);
-    setFormData({ name: category.name, sort_order: category.sort_order });
+  const handleOpenEdit = (cat: Category) => {
+    setEditId(cat.id);
+    setFormData({ name: cat.name, sort_order: cat.sort_order.toString() });
     setShowModal(true);
   };
 
-  // ฟังก์ชันบันทึกข้อมูล (เพิ่ม/แก้ไข)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name) return alert("กรุณากรอกชื่อหมวดหมู่");
+    if (!formData.name || !formData.sort_order) return;
 
     const payload = {
       name: formData.name,
       sort_order: Number(formData.sort_order),
-      is_active: true
     };
 
     if (editId) {
-      // โหมดแก้ไข
       const { data, error } = await supabase.from("categories").update(payload).eq("id", editId).select().single();
-      if (error) {
-        alert("แก้ไขข้อมูลไม่สำเร็จ");
-        console.error(error);
-      } else if (data) {
-        // อัปเดต State และเรียงลำดับใหม่ทันที
-        const updatedList = categories.map(c => c.id === editId ? data : c).sort((a, b) => a.sort_order - b.sort_order);
-        setCategories(updatedList);
+      if (!error && data) {
+        setCategories(categories.map((c) => (c.id === editId ? data : c)).sort((a, b) => a.sort_order - b.sort_order));
         setShowModal(false);
       }
     } else {
-      // โหมดเพิ่มใหม่
       const { data, error } = await supabase.from("categories").insert([payload]).select().single();
-      if (error) {
-        alert("เพิ่มหมวดหมู่ไม่สำเร็จ");
-        console.error(error);
-      } else if (data) {
-        const updatedList = [...categories, data].sort((a, b) => a.sort_order - b.sort_order);
-        setCategories(updatedList);
+      if (!error && data) {
+        setCategories([...categories, data].sort((a, b) => a.sort_order - b.sort_order));
         setShowModal(false);
       }
     }
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    if (confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบหมวดหมู่ "${name}" ?\n(หากมีเมนูอยู่ในหมวดหมู่นี้ อาจทำให้ลบไม่สำเร็จ ต้องย้ายเมนูออกก่อน)`)) {
-      const { error } = await supabase.from("categories").delete().eq("id", id);
-      if (!error) {
-        setCategories(categories.filter(c => c.id !== id));
-      } else {
-        alert("ลบข้อมูลไม่สำเร็จ (อาจมีเมนูอาหารค้างอยู่ในหมวดหมู่นี้ครับ)");
-      }
-    }
-  };
-
-  if (loading) return <div className="p-8 text-pos-text-muted">กำลังโหลดข้อมูลหมวดหมู่...</div>;
+  if (loading) return (
+    <div className="flex justify-center items-center h-48">
+      <div className="w-8 h-8 border-4 border-[#ff5722]/20 border-t-[#ff5722] rounded-full animate-spin"></div>
+    </div>
+  );
 
   return (
-    <div className="animate-in fade-in duration-300">
-      <div className="flex justify-between items-end mb-8">
+    <div className="animate-in fade-in duration-300 w-full">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-pos-brand mb-1">จัดการหมวดหมู่เมนู</h1>
-          <p className="text-pos-text-muted">เพิ่ม/แก้ไข และจัดลำดับหมวดหมู่การแสดงผล</p>
+          <h1 className="text-3xl font-extrabold text-slate-900 mb-1 tracking-tight">หมวดหมู่เมนู</h1>
+          <p className="text-slate-500 font-medium">จัดการหมวดหมู่อาหารและลำดับการจัดเรียงบนหน้าจอ POS</p>
         </div>
         <button 
           onClick={handleOpenAdd}
-          className="bg-pos-brand text-white px-6 py-3 rounded-xl hover:bg-orange-600 transition-all font-bold shadow-lg active:scale-95 flex items-center gap-2"
+          className="bg-gradient-to-r from-[#ff5722] to-[#ff8a50] text-white px-6 py-3 rounded-xl hover:shadow-[0_8px_24px_rgba(255,87,34,0.3)] transition-all font-bold active:scale-[0.98] flex items-center gap-2"
         >
-          ➕ เพิ่มหมวดหมู่
+          <Plus size={20} strokeWidth={2.5} /> เพิ่มหมวดหมู่
         </button>
       </div>
-      
-      {/* 📋 ตารางหมวดหมู่ */}
-      <div className="bg-pos-card rounded-2xl border border-pos-border shadow-lg overflow-hidden max-w-4xl">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead className="bg-pos-bg text-pos-text-muted text-sm border-b border-pos-border">
+
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
+        <div className="overflow-x-auto no-scrollbar">
+          <table className="w-full text-left border-collapse">
+            <thead className="bg-slate-50 border-b border-slate-100">
               <tr>
-                <th className="p-4 font-medium w-24 text-center">ลำดับ</th>
-                <th className="p-4 font-medium w-24 text-center">สถานะ</th>
-                <th className="p-4 font-medium">ชื่อหมวดหมู่</th>
-                <th className="p-4 font-medium text-right">จัดการ</th>
+                <th className="px-6 py-4 font-semibold text-slate-500 text-xs uppercase tracking-wider text-center w-24">ลำดับ</th>
+                <th className="px-6 py-4 font-semibold text-slate-500 text-xs uppercase tracking-wider">ชื่อหมวดหมู่</th>
+                <th className="px-6 py-4 font-semibold text-slate-500 text-xs uppercase tracking-wider text-right rounded-tr-2xl">จัดการ</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-pos-border">
+            <tbody className="divide-y divide-slate-100">
               {categories.map((cat) => (
-                <tr key={cat.id} className={`hover:bg-pos-bg/50 transition-colors ${!cat.is_active ? 'opacity-50 grayscale' : ''}`}>
-                  <td className="p-4 text-center">
-                    <span className="bg-pos-bg border border-pos-border px-3 py-1 rounded-lg font-mono font-bold text-pos-text-muted shadow-inner">
-                      {cat.sort_order}
-                    </span>
+                <tr key={cat.id} className="hover:bg-slate-50/80 transition-colors group">
+                  <td className="px-6 py-4 text-center font-bold text-slate-400 whitespace-nowrap">{cat.sort_order}</td>
+                  <td className="px-6 py-4 font-bold text-slate-900 text-[15px] whitespace-nowrap flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-[#ff5722]/10 text-[#ff5722] flex items-center justify-center">
+                        <Folders size={16} strokeWidth={2.5} />
+                    </div>
+                    {cat.name}
                   </td>
-                  <td className="p-4 text-center">
+                  <td className="px-6 py-4 text-right whitespace-nowrap">
                     <button 
-                      onClick={() => toggleActive(cat.id, cat.is_active)}
-                      className={`w-12 h-6 rounded-full transition-all relative ${cat.is_active ? 'bg-pos-success' : 'bg-gray-600'}`}
+                      onClick={() => handleOpenEdit(cat)} 
+                      className="px-4 py-2.5 inline-flex items-center gap-2 bg-slate-100 text-slate-600 hover:bg-[#ff5722] hover:text-white hover:shadow-md rounded-xl transition-all font-medium text-sm focus:outline-none focus:ring-2 focus:ring-[#ff5722]/50 active:scale-95"
                     >
-                      <div className={`w-5 h-5 bg-white rounded-full absolute top-0.5 transition-all ${cat.is_active ? 'right-0.5' : 'left-0.5'}`} />
-                    </button>
-                  </td>
-                  <td className="p-4 font-bold text-xl text-white">{cat.name}</td>
-                  <td className="p-4 text-right flex justify-end gap-2">
-                    <button 
-                      onClick={() => handleOpenEdit(cat)}
-                      className="px-4 py-2 bg-pos-border hover:bg-pos-brand hover:text-white rounded-lg transition-all font-medium text-sm"
-                    >
-                      📝 แก้ไข
-                    </button>
-                    <button 
-                      onClick={() => handleDelete(cat.id, cat.name)}
-                      className="px-4 py-2 bg-pos-danger/10 text-pos-danger hover:bg-pos-danger hover:text-white rounded-lg transition-all font-medium text-sm"
-                    >
-                      🗑️ ลบ
+                      <Edit2 size={16} strokeWidth={2} /> แก้ไข
                     </button>
                   </td>
                 </tr>
               ))}
               {categories.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="p-8 text-center text-pos-text-muted">ยังไม่มีหมวดหมู่เมนู</td>
+                  <td colSpan={3} className="px-6 py-12 text-center text-slate-500">
+                    <ShieldAlert size={40} className="mx-auto text-slate-300 mb-3" />
+                    ไม่มีข้อมูลหมวดหมู่
+                  </td>
                 </tr>
               )}
             </tbody>
@@ -176,56 +130,61 @@ export default function CategorySettingPage() {
         </div>
       </div>
 
-      {/* 📝 Modal ฟอร์มเพิ่ม/แก้ไขหมวดหมู่ */}
+      {/* Modal ฟอร์มหมวดหมู่ */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="glass-panel p-8 rounded-3xl w-full max-w-sm animate-in zoom-in duration-200">
-            <h2 className="text-2xl font-bold mb-6 border-b border-pos-border pb-4">
-              {editId ? "📝 แก้ไขหมวดหมู่" : "➕ เพิ่มหมวดหมู่ใหม่"}
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+          <div className="bg-white/95 backdrop-blur-xl border border-white p-6 md:p-8 rounded-[2rem] shadow-2xl w-full max-w-sm relative animate-in zoom-in-95 duration-300">
+            <button 
+              onClick={() => setShowModal(false)} 
+              className="absolute top-6 right-6 w-8 h-8 flex items-center justify-center bg-slate-100 text-slate-500 rounded-full hover:bg-slate-200 hover:text-slate-800 transition-colors"
+            >
+              <X size={18} strokeWidth={2.5} />
+            </button>
+
+            <h2 className="text-2xl font-bold text-slate-900 mb-6 flex items-center gap-2">
+              {editId ? <Edit2 className="text-[#ff5722]" size={24} /> : <Plus className="text-[#ff5722]" size={24} />}
+              {editId ? "แก้ไขหมวดหมู่" : "เพิ่มหมวดหมู่"}
             </h2>
             
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-5">
               <div>
-                <label className="block text-sm text-pos-text-muted mb-1">ชื่อหมวดหมู่</label>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">ลำดับการแสดงผล (ตัวเลข)</label>
                 <input 
-                  type="text" required
-                  value={formData.name}
-                  onChange={(e) => setFormData({...formData, name: e.target.value})}
-                  placeholder="เช่น ของหวาน, ท็อปปิ้ง"
-                  className="w-full bg-pos-bg border border-pos-border rounded-xl p-4 text-lg text-white focus:outline-none focus:border-pos-brand"
+                  type="number" required placeholder="เช่น 1 หรือ 2"
+                  value={formData.sort_order} onChange={(e) => setFormData({...formData, sort_order: e.target.value})} 
+                  className="w-full bg-slate-50 border border-slate-200 focus:border-[#ff5722] focus:ring-4 focus:ring-[#ff5722]/10 outline-none rounded-2xl p-3.5 transition-all text-slate-900 font-bold" 
                 />
               </div>
 
               <div>
-                <label className="block text-sm text-pos-text-muted mb-1">ลำดับการแสดงผล (เลขน้อยขึ้นก่อน)</label>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5 flex justify-between">
+                  ชื่อหมวดหมู่ <span className="text-[#ff5722]">*</span>
+                </label>
                 <input 
-                  type="number" required min="1"
-                  value={formData.sort_order}
-                  onChange={(e) => setFormData({...formData, sort_order: Number(e.target.value)})}
-                  className="w-full bg-pos-bg border border-pos-border rounded-xl p-4 text-lg font-mono text-white focus:outline-none focus:border-pos-brand text-center"
+                  type="text" required placeholder="เช่น ของหวาน, เครื่องดื่ม"
+                  value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} 
+                  className="w-full bg-slate-50 border border-slate-200 focus:border-[#ff5722] focus:ring-4 focus:ring-[#ff5722]/10 outline-none rounded-2xl p-3.5 transition-all text-slate-900 font-medium" 
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4 pt-4 mt-4 border-t border-pos-border">
+              <div className="flex gap-4 pt-4 mt-4 border-t border-slate-100">
                 <button 
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="py-3 bg-pos-border text-pos-text-muted font-bold rounded-xl hover:text-white transition-all"
+                  type="button" onClick={() => setShowModal(false)} 
+                  className="flex-1 py-3.5 bg-slate-100 text-slate-600 font-bold rounded-2xl hover:bg-slate-200 transition-colors"
                 >
                   ยกเลิก
                 </button>
                 <button 
-                  type="submit"
-                  className="py-3 bg-pos-brand text-white font-bold rounded-xl hover:bg-orange-600 transition-all active:scale-95 shadow-lg"
+                  type="submit" 
+                  className="flex-1 py-3.5 bg-[#ff5722] text-white font-bold rounded-2xl hover:bg-orange-600 hover:shadow-lg transition-all active:scale-[0.98] flex justify-center items-center gap-2"
                 >
-                  {editId ? "บันทึกการแก้ไข" : "บันทึกข้อมูล"}
+                  <Save size={18} strokeWidth={2.5}/> บันทึก
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
-
     </div>
   );
 }

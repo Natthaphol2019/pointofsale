@@ -4,38 +4,55 @@
   🎨 ตั้งค่า Theme สำหรับ Tailwind v4 
 */
 @theme {
-  /* Fluid Typography ใช้วิธี Clamp เบื้องต้นเพื่อให้รองรับการซูมและหน้าจอขนาดต่างๆ */
-  --font-sans: var(--font-kanit), var(--font-prompt), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-prompt), ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
 
-  /* สีหลักของแบรนด์ */
-  --color-pos-brand: #ff5722;      /* สีส้มอมแดงน่ากิน */
+  /* สีหลักของแบรนด์คงเดิม แต่มีความ Premium มากขึ้น */
+  --color-pos-brand: #ff5722;      
   --color-pos-brand-hover: #e64a19;
 
-  /* โทนสว่าง (Light Theme) เหมาะกับตาคนส่วนใหญ่และของกิน */
-  --color-pos-bg: #f3f4f6;       /* สีรองพื้นหลัง (Gray 100) */
-  --color-pos-card: #ffffff;     /* สีพื้นหลังการ์ดโต๊ะ/เมนู (White) */
-  --color-pos-border: #e5e7eb;   /* สีเส้นขอบ (Gray 200) */
-  --color-pos-text: #1f2937;     /* สีตัวหนังสือหลัก (Gray 800) */
-  --color-pos-text-muted: #6b7280; /* สีตัวหนังสือรอง (Gray 500) */
+  /* โทน Modern Light UI */
+  --color-pos-bg: #f8fafc;       /* พื้นหลังหรูหรา slate-50 */
+  --color-pos-card: #ffffff;     /* สีพื้นหลังการ์ด */
+  --color-pos-border: #f1f5f9;   /* สีเส้นขอบอ่อนๆ slate-100 */
+  --color-pos-text: #1e293b;     /* สีตัวหนังสือ slate-800 */
+  --color-pos-text-muted: #64748b; /* สีตัวหนังสือรอง slate-500 */
 
   /* สีสถานะ (Status Colors) */
-  --color-pos-success: #10b981;  /* เขียวสดใจ */
-  --color-pos-danger: #ef4444;   /* แดงชัดเจน */
-  --color-pos-warning: #f59e0b;  /* เหลืองรอคอย */
+  --color-pos-success: #10b981;  
+  --color-pos-danger: #ef4444;   
+  --color-pos-warning: #f59e0b;  
 }
 
 /* ตั้งค่าพื้นฐานสำหรับทั้งแอป */
 @layer base {
   body {
-    /* Touch Optimizations: กันเด้ง กันดึงจอ กันคลุมดำ */
-    @apply bg-pos-bg text-pos-text min-h-screen overflow-x-hidden touch-manipulation overscroll-none select-none;
+    /* Touch Optimizations: ป้องกันการเด้งหรือคลุมดำโดยไม่ตั้งใจ */
+    @apply bg-pos-bg text-pos-text min-h-[100dvh] overflow-x-hidden touch-manipulation overscroll-none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Scrollbar แบบสะอาด */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 10px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
   }
 }
 
 /* คลาสพิเศษ */
 @layer utilities {
+  /* Panel สำหรับการ์ดข้อมูล */
   .glass-panel {
-    @apply bg-pos-card/90 backdrop-blur-md border border-pos-border shadow-xl;
+    @apply bg-white/90 backdrop-blur-xl border border-pos-border shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-2xl;
   }
   
   /* ตัวช่วยสำหรับมือถือ (Safe Area) */
@@ -46,6 +63,15 @@
     padding-top: env(safe-area-inset-top);
   }
   .safe-area-bottom {
-    padding-bottom: calc(env(safe-area-inset-bottom) + 1rem); /* 1rem เผื่อเหลือเผื่อขาด */
+    padding-bottom: calc(env(safe-area-inset-bottom) + 1rem);
+  }
+
+  /* ซ่อน Scrollbar สำรับเนวิเกชั่น */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
   }
 }
